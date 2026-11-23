@@ -6472,14 +6472,18 @@ pub(crate) fn boot(
     // Shell::new must stay window-free for the test host. Shows while
     // no summon binding exists and the flow is not retired; a binding
     // through any path retires it.
-    shell.update(cx, |shell, cx| {
-        let bound = !shell.settings.summon.display.is_empty();
-        let dismissed = shell.config.onboarding_dismissed;
-        if dropterm::core::global_shortcut::onboarding_should_show(bound, dismissed) {
-            let entity = cx.entity();
-            crate::onboarding::open_onboarding(cx, entity, crate::onboarding::Origin::FirstRun);
-        }
-    });
+    // Decided from a finished read, then opened outside any Shell
+    // lease: open_onboarding reads the shell itself.
+    let (bound, dismissed) = {
+        let shell = shell.read(cx);
+        (
+            !shell.settings.summon.display.is_empty(),
+            shell.config.onboarding_dismissed,
+        )
+    };
+    if dropterm::core::global_shortcut::onboarding_should_show(bound, dismissed) {
+        crate::onboarding::open_onboarding(cx, shell.clone(), crate::onboarding::Origin::FirstRun);
+    }
     // The tick: 100 ms of verb drain + frame pump, holding the shell
     // entity strongly for the app's lifetime (the surface's windows
     // come and go; the shell owns the machine and must not).
